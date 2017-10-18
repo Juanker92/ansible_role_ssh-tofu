@@ -1,0 +1,38 @@
+---
+# Hola amigos de Paradigma Digital, soy un joven DevOps enamorado de vuestra cultura empresarial 
+# y vuestra filosofía de trabajo. Me gustaría haceros llegar un CV actualizado. 
+# Un saludo y larga vida a Jenkins! :)
+- name: Check Ansible
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    tmp_cert_file: "{{ lookup('env','VIRTUALENV') }}/.cert"
+  tasks:
+    - name: 'Set paas_logpath fact'
+      set_fact: paas_logpath='{{playbook_dir}}/logs'
+    - name: Checking if infrastructure dir exits
+      stat: path=infrastructure/{{infrastructure_name}}
+      register: infrapath
+    - name: Checking if roles dir exits
+      stat: path=roles
+      register: rolespath
+    - name: Checking Ansible requirements
+      assert:
+        that:
+          - "ansible_version > 2.0"
+          - infrapath.stat.exists == true
+          - rolespath.stat.exists == true
+
+    - name: Add certificates to ssh agent
+      shell: echo "{{ lookup('hashi_vault', 'secret=secret/ssh-keys/{{item}} token={{vault_token}} url={{const_vault_url_server}}') }}" > {{ tmp_cert_file }} && chmod 0400 {{ tmp_cert_file }} && ssh-add {{ tmp_cert_file }} && rm -Rf {{ tmp_cert_file }}
+      with_sequence: start=0 end=10 format=key%02x
+      ignore_errors: yes
+      no_log: True
+    - name: Ensure clean environment
+      shell: rm -Rf {{ tmp_cert_file }}
+      ignore_errors: yes
+      no_log: True
+
+- name: Running infrastructure Stages
+  include: "infrastructure/{{ infrastructure_name }}/main.yml"
